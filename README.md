@@ -1,58 +1,199 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Laravel API REST (Tickets & Devices)
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+REST API built with Laravel for user authentication, ticket management, and device assignment.
 
-## About Laravel
+## Features
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- Authentication with **Laravel Sanctum** (token-based API auth)
+- Tickets CRUD endpoints
+- Devices listing and assignment endpoint
+- Validation, `try/catch`, exception handling, and correct HTTP status codes
+- Global API **Rate Limiter** (`10 requests/minute` by client IP)
+- Automatic **Discord alerts** for:
+  - Internal server errors (`500`)
+  - Rate limit exceeded (`429`)
+- **Sentry** integration for monitoring and error traceability
+- Docker setup with Laravel app + SQL Server
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Requirements
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- Docker + Docker Compose
+- (Optional for local non-Docker) PHP 8.2+, Composer, SQL Server
 
-## Learning Laravel
+## Environment Variables
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+Copy `.env.example` to `.env` and configure:
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+```env
+APP_NAME=Laravel
+APP_ENV=local
+APP_DEBUG=true
+APP_URL=http://localhost
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+DB_CONNECTION=sqlsrv
+DB_HOST=sqlserver
+DB_PORT=1433
+DB_DATABASE=laravel
+DB_USERNAME=sa
+DB_PASSWORD=Password123*
 
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+DISCORD_WEBHOOK_URL=
+SENTRY_LARAVEL_DSN=
+SENTRY_TRACES_SAMPLE_RATE=1.0
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+> Do not commit real webhook URLs or DSNs to public repositories.
 
-## Contributing
+## Run with Docker (Recommended)
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+1. Build and start containers:
 
-## Code of Conduct
+```bash
+docker compose up -d --build
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+2. Check app is up:
 
-## Security Vulnerabilities
+```bash
+curl http://localhost:8000/up
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+3. API base URL:
 
-## License
+```text
+http://localhost:8000/api
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+### Stop containers
+
+```bash
+docker compose down
+```
+
+## Run Locally (without Docker)
+
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate
+php artisan serve
+```
+
+## Authentication with Laravel Sanctum
+
+- `POST /api/register` and `POST /api/login` return a token.
+- Send the token in protected endpoints:
+
+```http
+Authorization: Bearer <token>
+Accept: application/json
+```
+
+- Protected routes:
+  - `/api/tickets` (all CRUD endpoints)
+  - `/api/devices`
+  - `/api/devices/assign`
+  - `/api/user`
+
+## API Endpoints
+
+Base path: `/api`
+
+| Method | Endpoint | Auth Required | Description |
+|---|---|---|---|
+| POST | `/register` | No | Register user |
+| POST | `/login` | No | User login |
+| GET | `/tickets` | Yes | Get tickets |
+| GET | `/tickets/{id}` | Yes | Get ticket by id |
+| POST | `/tickets` | Yes | Create ticket |
+| PUT | `/tickets/{id}` | Yes | Update ticket |
+| DELETE | `/tickets/{id}` | Yes | Delete ticket |
+| GET | `/devices` | Yes | Get devices |
+| POST | `/devices/assign` | Yes | Assign device |
+| GET | `/user` | Yes | Get authenticated user |
+
+## HTTP Responses and Error Handling
+
+- `200 OK`: successful read/update/login
+- `201 Created`: successful resource creation
+- `401 Unauthorized`: invalid credentials or missing/invalid token
+- `404 Not Found`: resource does not exist
+- `422 Unprocessable Entity`: validation errors
+- `429 Too Many Requests`: rate limit exceeded
+- `500 Internal Server Error`: unexpected server error
+
+The controllers use `try/catch` blocks and return structured JSON responses.
+
+## Rate Limiting
+
+- All API routes are protected with Laravel `throttle:api`.
+- Current policy: **10 requests per minute per IP**.
+- If limit is exceeded, API returns:
+  - Status `429`
+  - JSON message: `Too many requests`
+- A Discord alert is sent automatically with endpoint, IP, timestamp, and attempts.
+
+## Discord Alerts
+
+Configured with `DISCORD_WEBHOOK_URL` in `.env`.
+
+### 1) Internal Error Alert (`500`)
+
+Sent when an internal exception occurs. Includes:
+- Endpoint
+- HTTP method
+- Error message
+- Date
+- Client IP
+
+### 2) Rate Limit Alert (`429`)
+
+Sent when request limit is exceeded. Includes:
+- Endpoint
+- Client IP
+- Timestamp
+- Attempts count
+
+## Sentry Integration
+
+Configured with:
+
+```env
+SENTRY_LARAVEL_DSN=your_dsn_here
+SENTRY_TRACES_SAMPLE_RATE=1.0
+```
+
+Sentry is used to:
+- Capture exceptions
+- Register HTTP 500 errors
+- Register unexpected errors
+- Keep evidence in logs when events are sent (event ID logging)
+
+## Quick Usage Example
+
+1. Register:
+
+```bash
+curl -X POST http://localhost:8000/api/register \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d "{\"name\":\"John Doe\",\"email\":\"john@example.com\",\"password\":\"password123\"}"
+```
+
+2. Login and copy token:
+
+```bash
+curl -X POST http://localhost:8000/api/login \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d "{\"email\":\"john@example.com\",\"password\":\"password123\"}"
+```
+
+3. Call protected endpoint:
+
+```bash
+curl -X GET http://localhost:8000/api/tickets \
+  -H "Accept: application/json" \
+  -H "Authorization: Bearer <token>"
+```

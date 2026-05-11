@@ -1,0 +1,78 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Docker/php/Dockerfile
+    container_name: laravel_app
+    working_dir: /var/www
+    command: >
+      sh -c "php -r \"file_exists('.env') || copy('.env.example', '.env');\";
+      sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=sqlsrv/' .env;
+      sed -i 's/^DB_HOST=.*/DB_HOST=sqlserver/' .env;
+      sed -i 's/^DB_PORT=.*/DB_PORT=1433/' .env;
+      sed -i 's/^DB_DATABASE=.*/DB_DATABASE=laravel/' .env;
+      sed -i 's/^DB_USERNAME=.*/DB_USERNAME=sa/' .env;
+      sed -i 's/^DB_PASSWORD=.*/DB_PASSWORD=Password123*/' .env;
+      sed -i 's/^CACHE_STORE=.*/CACHE_STORE=array/' .env;
+      sed -i 's/^SESSION_DRIVER=.*/SESSION_DRIVER=file/' .env;
+      sed -i 's/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env;
+      if ! grep -q '^APP_KEY=base64:' .env; then php artisan key:generate --force; fi;
+      if [ ! -f vendor/autoload.php ]; then composer install --no-interaction --prefer-dist; fi;
+      php artisan config:clear;
+      php artisan migrate --force;
+      php artisan serve --host=0.0.0.0 --port=8000"
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/var/www
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      DB_CONNECTION: sqlsrv
+      DB_HOST: sqlserver
+      DB_PORT: 1433
+      DB_DATABASE: laravel
+      DB_USERNAME: sa
+      DB_PASSWORD: "Password123*"
+      SESSION_DRIVER: file
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+    depends_on:
+      sqlserver-init:
+        condition: service_completed_successfully
+    networks:
+      - laravel
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Password123*"
+    ports:
+      - "1433:1433"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" -C || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - laravel
+
+  sqlserver-init:
+    image: mcr.microsoft.com/mssql-tools
+    container_name: sqlserver_init
+    environment:
+      MSSQL_SA_PASSWORD: "Password123*"
+    command: >
+      /bin/bash -c "/opt/mssql-tools/bin/sqlcmd -S sqlserver -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"IF DB_ID('laravel') IS NULL CREATE DATABASE [laravel]\""
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - laravel
+
+networks:
+  laravel:
